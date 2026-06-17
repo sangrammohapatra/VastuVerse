@@ -1,0 +1,83 @@
+{
+  "name": "VastuVerse — AI House Planning",
+  "short_name": "VastuVerse",
+  "description": "Design your home, room by room, with AI-assisted floor plans, interiors, cost estimates, and architect reviews — built for Indian homeowners.",
+  "id": "vastuverse",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#2E7D32",
+  "background_color": "#F8F9FA",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["productivity", "lifestyle", "design"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard-1280.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Plan dashboard"
+    },
+    {
+      "src": "/screenshots/wizard-mobile-640.png",
+      "sizes": "640x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Plan wizard on mobile"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New plan",
+      "short_name": "New plan",
+      "description": "Start a new home design",
+      "url": "/plans/new",
+      "icons": [{ "src": "/icons/shortcut-new.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Marketplace",
+      "short_name": "Marketplace",
+      "description": "Get your plan reviewed by an architect",
+      "url": "/marketplace",
+      "icons": [{ "src": "/icons/shortcut-marketplace.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 480
+  }
+}

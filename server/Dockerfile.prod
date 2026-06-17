@@ -1,0 +1,57 @@
+# VastuVerse client — production image (multi-stage).
+#
+#   stage 1 (builder)  npm install + vite build → /app/dist
+#   stage 2 (runtime)  nginx:alpine serving /usr/share/nginx/html
+#
+# Final image is ~25 MB. The Vite-built bundle is ~600 KB gzipped
+# (Three.js code-split out to a separate chunk via React.lazy).
+
+# ─── Stage 1: builder ───────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# These ARGs are populated by docker-compose `args:` and become
+# Vite-time environment variables. They're baked into the bundle —
+# changing them requires a rebuild.
+ARG VITE_API_BASE_URL
+ARG VITE_RAZORPAY_KEY_ID
+ARG VITE_SENTRY_DSN
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_RAZORPAY_KEY_ID=${VITE_RAZORPAY_KEY_ID} \
+    VITE_SENTRY_DSN=${VITE_SENTRY_DSN} \
+    NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+
+RUN npm run build && \
+    # Sanity check: bundle should exist
+    test -d dist && \
+    test -f dist/index.html
+
+# ─── Stage 2: nginx runtime ─────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+# Drop the default config — we provide our own with SPA fallback,
+# gzip, and Cache-Control rules tuned for hashed Vite assets.
+RUN rm /etc/nginx/conf.d/default.conf
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built SPA
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Health endpoint for the docker-compose healthcheck.
+# nginx returns 200 from /health out of the box via our conf.
+
+EXPOSE 80 443
+
+# nginx:alpine default CMD already runs nginx in the foreground.
+# We add `daemon off;` explicitly for clarity + a STOPSIGNAL so
+# `docker stop` drains connections cleanly.
+STOPSIGNAL SIGQUIT
+
+CMD ["nginx", "-g", "daemon off;"]

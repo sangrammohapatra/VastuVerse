@@ -1,0 +1,45 @@
+{
+  "name": "vastuverse-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VastuVerse — AI-powered house planning web app (API server)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "seed": "node scripts/seed-dev-users.js",
+    "seed:clear": "node scripts/seed-dev-users.js --clear",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.20.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+   "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.2.0",
+    "helmet": "^8.0.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.0",
+    "nodemailer": "^6.9.15",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "pdfkit": "^0.19.0",
+    "razorpay": "^2.9.5",
+    "redis": "^4.7.0",
+    "socket.io": "^4.8.0",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

@@ -1,0 +1,256 @@
+# VastuVerse production deploy.
+#
+# Triggers on push to main + manual workflow_dispatch.
+#
+# Pipeline:
+#   1. test       — server Jest+Supertest + client typecheck/lint
+#   2. build      — build & push both Docker images to GHCR (cache layers)
+#   3. deploy     — SSH to VPS, pull images, docker compose up -d
+#   4. verify     — curl /api/v1/health, fail the run if status != 200
+#
+# Required secrets (in GitHub repo Settings → Secrets → Actions):
+#   VPS_HOST          IP or hostname of the production server
+#   VPS_USER          SSH user (typically `deploy` — non-root)
+#   VPS_SSH_KEY       private key for that user (ssh-keygen -t ed25519)
+#   VPS_SSH_PORT      optional, defaults to 22
+#   DOMAIN            e.g. vastuverse.app — used for the post-deploy health check
+#   GHCR_TOKEN        PAT with package:write scope (uses GITHUB_TOKEN if same-repo)
+
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Skip the test job (emergency hotfix)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false   # never cancel mid-deploy
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_SERVER: ghcr.io/${{ github.repository }}-server
+  IMAGE_CLIENT: ghcr.io/${{ github.repository }}-client
+
+jobs:
+  # ─── 1. Test ─────────────────────────────────────────────────────
+  test:
+    name: Test
+    if: ${{ !inputs.skip_tests }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mongo:
+        image: mongo:7.0
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Server — install + test
+        working-directory: ./server
+        env:
+          NODE_ENV: test
+          MONGO_URI: mongodb://localhost:27017/vastuverse_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_value_for_ci_only
+          JWT_REFRESH_SECRET: test_refresh_secret_value_for_ci_only
+        run: |
+          npm ci --no-audit --no-fund
+          npm test -- --ci --coverage --maxWorkers=2
+
+      - name: Server — upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage
+          path: server/coverage/
+          retention-days: 7
+
+      - name: Client — install + build (smoke check)
+        working-directory: ./client
+        env:
+          VITE_API_BASE_URL: https://example.com/api/v1
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          test -f dist/index.html
+
+  # ─── 2. Build & push images ─────────────────────────────────────
+  build:
+    name: Build & push images
+    needs: test
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag metadata
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "tag=${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "image_server=${IMAGE_SERVER}:${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "image_client=${IMAGE_CLIENT}:${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Build & push server image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_SERVER }}:latest
+            ${{ steps.meta.outputs.image_server }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,scope=server,mode=max
+
+      - name: Build & push client image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/Dockerfile.prod
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=https://${{ secrets.DOMAIN }}/api/v1
+            VITE_RAZORPAY_KEY_ID=${{ secrets.VITE_RAZORPAY_KEY_ID }}
+          tags: |
+            ${{ env.IMAGE_CLIENT }}:latest
+            ${{ steps.meta.outputs.image_client }}
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,scope=client,mode=max
+
+      - name: Output image tag for downstream jobs
+        id: out
+        run: echo "tag=${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
+
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+
+  # ─── 3. Deploy via SSH ──────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://${{ secrets.DOMAIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH → docker compose up -d
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          # 5 min budget — pull is the long bit if the cache layer changed
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /opt/vastuverse
+
+            # Pull the new images
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose -f docker-compose.prod.yml pull
+
+            # Roll the stack — `--no-deps` would skip dependent service restarts
+            # but we WANT them: a server upgrade means restarting nginx so
+            # it re-resolves the upstream's IP.
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Prune dangling images older than 7d to free disk
+            docker image prune -af --filter "until=168h"
+
+            echo "Deployed ${{ needs.build.outputs.tag }}"
+
+  # ─── 4. Post-deploy health check ────────────────────────────────
+  verify:
+    name: Health check
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Wait for service to settle
+        run: sleep 20
+
+      - name: Curl /api/v1/health
+        run: |
+          set -e
+          URL="https://${{ secrets.DOMAIN }}/api/v1/health"
+          echo "Checking $URL"
+
+          # Retry up to 6 times with 10s back-off (covers container restart)
+          for i in 1 2 3 4 5 6; do
+            HTTP=$(curl -fsS -o /tmp/health.json -w "%{http_code}" "$URL" || echo "000")
+            if [ "$HTTP" = "200" ]; then
+              echo "✓ $URL returned 200"
+              cat /tmp/health.json
+              # Surface the JSON body in the workflow summary
+              echo "## Health check passed" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+              cat /tmp/health.json >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            fi
+            echo "  attempt $i → $HTTP, retrying in 10s…"
+            sleep 10
+          done
+          echo "✗ Health check failed after 6 attempts"
+          exit 1
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deploy verification failed — investigate immediately"
+          # Hook to Slack/PagerDuty here:
+          #   curl -X POST -H "Content-type: application/json" \
+          #     --data "{\"text\":\"VastuVerse deploy verify failed\"}" \
+          #     ${{ secrets.SLACK_WEBHOOK }}
