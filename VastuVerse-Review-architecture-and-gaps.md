@@ -302,9 +302,9 @@ India's Energy Conservation Building Code (ECBC 2017) and GRIHA rating system ar
 
 ## Section 3: Original Priority Matrix (Unrevised)
 
-| Priority | Item | Effort | Impact |
-|---|---|---|---|
-| P0 | Fix image URL persistence (they expire) | 1 day | High — data loss |
+| Priority | Item | Effort | Impact | Status
+|---|---|---|---|---|
+| P0 | Fix image URL persistence (they expire) | 1 day | High — data loss | Done |
 | P0 | Align TIER_LIMITS to single source of truth | 2 hrs | High — billing integrity |
 | P0 | Write rule engine unit tests | 2 days | High — liability |
 | P0 | Complete WhatsApp integration | 3 days | High — advertised feature |

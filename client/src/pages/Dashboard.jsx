@@ -125,7 +125,7 @@ function HomeownerDashboard({ user }) {
   const theme = useTheme();
   const tier = TIER_META[user?.tier] || TIER_META.FREE;
   const [plans, setPlans] = useState([]);
-  const [aiUsage, setAiUsage] = useState({ used: 0, limit: 3 });
+  const [aiUsage, setAiUsage] = useState({ used: 0, limit: null, unlimited: false });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -138,7 +138,11 @@ function HomeownerDashboard({ user }) {
         ]);
         if (!cancelled) {
           setPlans(plansRes.data.plans || []);
-          setAiUsage({ used: usageRes.used ?? 0, limit: usageRes.limit ?? 3 });
+          setAiUsage({
+            used: usageRes.data.used ?? 0,
+            limit: usageRes.data.limit ?? null,
+            unlimited: usageRes.data.unlimited ?? false,
+          });
         }
       } catch (_) {
         // silent — empty state handles the no-data case
@@ -150,7 +154,7 @@ function HomeownerDashboard({ user }) {
     return () => { cancelled = true; };
   }, []);
 
-  const remaining = Math.max(0, aiUsage.limit - aiUsage.used);
+  const remaining = aiUsage.unlimited ? null : Math.max(0, (aiUsage.limit ?? 0) - aiUsage.used);
   const displayName = useMemo(() => {
     if (user?.fullName) return user.fullName;
     if (user?.email) return user.email.split('@')[0].replace(/[._-]/g, ' ');
@@ -209,10 +213,10 @@ function HomeownerDashboard({ user }) {
         <GlassPanel>
           <Stack direction="row" alignItems="center" spacing={3}>
             <ProgressRing
-              value={remaining}
-              max={aiUsage.limit}
-              label={`${remaining}`}
-              sublabel={`/ ${aiUsage.limit} today`}
+              value={aiUsage.unlimited ? 1 : remaining}
+              max={aiUsage.unlimited ? 1 : aiUsage.limit}
+              label={aiUsage.unlimited ? '∞' : `${remaining}`}
+              sublabel={aiUsage.unlimited ? 'Unlimited' : `/ ${aiUsage.limit} today`}
             />
             <Box sx={{ flex: 1 }}>
               <Stack direction="row" alignItems="center" spacing={1}>
@@ -220,7 +224,9 @@ function HomeownerDashboard({ user }) {
                 <Typography sx={{ fontWeight: 700 }}>AI generations remaining</Typography>
               </Stack>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, mb: 1.5 }}>
-                Resets at midnight IST. Upgrade for unlimited generations on Pro.
+                {aiUsage.unlimited
+                  ? 'No daily cap on your plan. Generate as many as you need.'
+                  : 'Resets at midnight IST. Upgrade for unlimited generations on Pro.'}
               </Typography>
               <Button component={RouterLink} to="/profile" size="small" variant="outlined">
                 Manage plan

@@ -13,6 +13,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FlagIcon from '@mui/icons-material/Flag';
+import TuneIcon from '@mui/icons-material/Tune';
 
 import { api } from '../../utils/axiosInstance';
 
@@ -105,6 +106,8 @@ export default function AdminFeatureFlags() {
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+
+      <TierLimitsCard />
 
       {loading ? (
         <Stack spacing={1}>
@@ -248,6 +251,145 @@ export default function AdminFeatureFlags() {
         onChange={load}
       />
     </Box>
+  );
+}
+
+/* ─── AI Generation Daily Limits card ────────────────────────────── */
+
+function TierLimitsCard() {
+  const theme = useTheme();
+  const [limits, setLimits] = useState({ FREE: 5, BASIC: 20, PRO: 0, ENTERPRISE: 0 });
+  const [draft, setDraft]   = useState(null); // null = not dirty
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [alert, setAlert]     = useState(null);
+
+  useEffect(() => {
+    api.get('/admin/tier-limits')
+      .then(({ data }) => setLimits(data.limits))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const effective = draft ?? limits;
+  const isDirty   = draft !== null;
+
+  const handleChange = (tier, value) => {
+    const n = parseInt(value, 10);
+    setDraft((d) => ({ ...(d ?? limits), [tier]: Number.isNaN(n) ? 0 : Math.max(0, n) }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setAlert(null);
+    try {
+      const { data } = await api.put('/admin/tier-limits', effective);
+      setLimits(data.limits ?? effective);
+      setDraft(null);
+      setAlert({ severity: 'success', message: 'Generation limits saved.' });
+    } catch (e) {
+      setAlert({ severity: 'error', message: e.response?.data?.error || 'Save failed.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        p: 2.5, mb: 3,
+        background: theme.vastu.cardBg,
+        border: theme.vastu.cardBorder,
+        backdropFilter: theme.vastu.cardBlur,
+      }}
+    >
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <TuneIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+            <Typography sx={{ fontWeight: 700 }}>AI Generation Daily Limits</Typography>
+          </Stack>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Enter 0 for unlimited. Changes take effect within 60 s without a restart.
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {isDirty && (
+            <Button size="small" onClick={() => setDraft(null)}>
+              Reset
+            </Button>
+          )}
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleSave}
+            disabled={!isDirty || saving}
+            startIcon={saving && <CircularProgress size={14} sx={{ color: 'inherit' }} />}
+            sx={{ fontWeight: 700, minWidth: 80 }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </Stack>
+      </Stack>
+
+      {alert && (
+        <Alert severity={alert.severity} onClose={() => setAlert(null)} sx={{ mb: 2, borderRadius: 1 }}>
+          {alert.message}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} variant="rectangular" height={72} sx={{ flex: 1, borderRadius: 1 }} />
+          ))}
+        </Stack>
+      ) : (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          {TIERS.map((tier) => {
+            const val = effective[tier] ?? 0;
+            return (
+              <Box key={tier} sx={{ flex: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    fontWeight: 800,
+                    letterSpacing: 0.6,
+                    color: TIER_COLOR[tier],
+                    mb: 0.5,
+                  }}
+                >
+                  {tier}
+                </Typography>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="number"
+                  value={val}
+                  onChange={(e) => handleChange(tier, e.target.value)}
+                  inputProps={{ min: 0, step: 1, style: { textAlign: 'center', fontWeight: 700 } }}
+                  helperText={val === 0 ? 'Unlimited' : `${val} / day`}
+                  FormHelperTextProps={{
+                    sx: {
+                      textAlign: 'center',
+                      fontWeight: val === 0 ? 700 : 400,
+                      color: val === 0 ? '#2E7D32' : 'text.secondary',
+                    },
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '&.Mui-focused fieldset': { borderColor: TIER_COLOR[tier] },
+                    },
+                  }}
+                />
+              </Box>
+            );
+          })}
+        </Stack>
+      )}
+    </Card>
   );
 }
 

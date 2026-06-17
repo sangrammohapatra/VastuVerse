@@ -17,6 +17,7 @@ const flags        = require('../controllers/admin/featureFlagsController');
 const subs         = require('../controllers/admin/subscriptionsController');
 const plans        = require('../controllers/admin/plansController');
 const storage      = require('../controllers/admin/storageSettingsController');
+const tierLimits   = require('../controllers/admin/tierLimitsController');
 
 const router = express.Router();
 
@@ -64,6 +65,10 @@ router.post('/cost-datasets/import',
 router.get('/municipal-rules',                 content.listMunicipalRules);
 router.post('/municipal-rules',                content.upsertMunicipalRule);
 router.delete('/municipal-rules/:id',          content.deleteMunicipalRule);
+
+/* ── AI generation tier limits ───────────────────────────────────── */
+router.get('/tier-limits',  tierLimits.getLimits);
+router.put('/tier-limits',  tierLimits.saveLimits);
 
 /* ── Storage provider settings ───────────────────────────────────── */
 router.get('/storage-settings',        storage.getSettings);

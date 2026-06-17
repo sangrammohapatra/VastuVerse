@@ -17,9 +17,20 @@ const redis = require("../config/redis");
 const {
   enqueueGeneration,
   getJobSnapshot,
-  TIER_LIMITS,
 } = require("../queues/aiGenerationQueue");
+const { getTierLimits, getLimitForTier, isUnlimited } = require("../services/tierLimits");
 const { buildInteriorPrompt, buildExteriorPrompt, buildBirdEyePrompt } = require("../utils/buildImagePrompt");
+
+/** Build the upgrade-prompt tiers array from live DB limits. */
+function buildUpgradeTiers(limits) {
+  const fmt = (n) => (isUnlimited(n) ? "Unlimited" : n);
+  return [
+    { id: "FREE",       label: "Free",       daily: fmt(limits.FREE),       priceInr: 0 },
+    { id: "BASIC",      label: "Basic",      daily: fmt(limits.BASIC),      priceInr: 99 },
+    { id: "PRO",        label: "Pro",        daily: fmt(limits.PRO),        priceInr: 499, recommended: true },
+    { id: "ENTERPRISE", label: "Enterprise", daily: fmt(limits.ENTERPRISE), priceInr: 1999 },
+  ];
+}
 
 const ROOM_SUGGESTION_TTL = 300;          // 5 min
 const PALETTE_TTL = 300;                  // 5 min
@@ -99,7 +110,8 @@ exports.enqueueFloorPlanGeneration = async (req, res, next) => {
     const { planId } = req.params;
     const userId = req.user.userId;
     const tier = req.user.tier || "FREE";
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.FREE;
+    const allLimits = await getTierLimits();
+    const limit = allLimits[tier] ?? allLimits.FREE;
 
     /* ── Daily rate limit ── */
     const key = `ai_gen_limit:${userId}:${todayKey()}`;
@@ -112,7 +124,7 @@ exports.enqueueFloorPlanGeneration = async (req, res, next) => {
       count = 0; // allow the job through if Redis is down
     }
 
-    if (count > limit) {
+    if (!isUnlimited(limit) && count > limit) {
       try { await redis.decr(key); } catch (_) {}
       return res.status(429).json({
         error: "ai_limit_reached",
@@ -122,12 +134,7 @@ exports.enqueueFloorPlanGeneration = async (req, res, next) => {
         upgradePrompt: {
           title: "Daily AI generation limit reached",
           message: `Your ${tier} plan allows ${limit} AI generations per day. Upgrade for more.`,
-          tiers: [
-            { id: "FREE", label: "Free", daily: TIER_LIMITS.FREE, priceInr: 0 },
-            { id: "BASIC", label: "Basic", daily: TIER_LIMITS.BASIC, priceInr: 99 },
-            { id: "PRO", label: "Pro", daily: TIER_LIMITS.PRO, priceInr: 499, recommended: true },
-            { id: "ENTERPRISE", label: "Enterprise", daily: "Unlimited", priceInr: 1999 },
-          ],
+          tiers: buildUpgradeTiers(allLimits),
         },
       });
     }
@@ -197,7 +204,8 @@ exports.colorPalettes = async (req, res, next) => {
  * Returns { ok: true, used, limit } on success, or { ok: false, used, limit, upgradePrompt }.
  */
 async function reserveCredits(userId, tier, count) {
-  const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.FREE;
+  const allLimits = await getTierLimits();
+  const limit = allLimits[tier] ?? allLimits.FREE;
   const key = `ai_gen_limit:${userId}:${new Date().toISOString().slice(0, 10)}`;
   let used = 0;
 
@@ -209,7 +217,7 @@ async function reserveCredits(userId, tier, count) {
     return { ok: true, used: 0, limit };
   }
 
-  if (used > limit) {
+  if (!isUnlimited(limit) && used > limit) {
     try { await redis.decrby(key, count); } catch (_) {}
     return {
       ok: false,
@@ -218,12 +226,7 @@ async function reserveCredits(userId, tier, count) {
       upgradePrompt: {
         title: "Daily AI generation limit reached",
         message: `Your ${tier} plan allows ${limit} AI generations per day. Upgrade for more.`,
-        tiers: [
-          { id: "FREE", label: "Free", daily: TIER_LIMITS.FREE, priceInr: 0 },
-          { id: "BASIC", label: "Basic", daily: TIER_LIMITS.BASIC, priceInr: 99 },
-          { id: "PRO", label: "Pro", daily: TIER_LIMITS.PRO, priceInr: 499, recommended: true },
-          { id: "ENTERPRISE", label: "Enterprise", daily: "Unlimited", priceInr: 1999 },
-        ],
+        tiers: buildUpgradeTiers(allLimits),
       },
     };
   }
@@ -465,13 +468,13 @@ exports.getUsage = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const tier = req.user.tier || "FREE";
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.FREE;
+    const limit = await getLimitForTier(tier);
     const key = `ai_gen_limit:${userId}:${todayKey()}`;
     let used = 0;
     try {
       const raw = await redis.get(key);
       used = raw ? parseInt(raw, 10) : 0;
     } catch (_) {}
-    res.json({ used, limit, tier });
+    res.json({ used, limit: isUnlimited(limit) ? null : limit, unlimited: isUnlimited(limit), tier });
   } catch (e) { next(e); }
 };

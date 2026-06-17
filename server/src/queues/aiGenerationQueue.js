@@ -370,10 +370,4 @@ module.exports = {
   startWorker,
   getJobSnapshot,
   priorityForTier,
-  TIER_LIMITS: {
-    FREE: 3,
-    BASIC: 10,
-    PRO: 50,
-    ENTERPRISE: 9999,
-  },
 };
