@@ -24,6 +24,7 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import ArticleIcon from "@mui/icons-material/Article";
 import FlagIcon from "@mui/icons-material/Flag";
 import ManageHistoryIcon from "@mui/icons-material/ManageHistory";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import MenuIcon from "@mui/icons-material/Menu";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -40,7 +41,8 @@ const NAV_ITEMS = [
   { path: "ai-monitoring", Icon: MemoryIcon, label: "AI Monitoring" },
   { path: "content", Icon: ArticleIcon, label: "Content" },
   { path: "feature-flags", Icon: FlagIcon, label: "Feature Flags" },
-  { path: "audit-logs", Icon: ManageHistoryIcon, label: "Audit Logs" },
+  { path: "audit-logs",      Icon: ManageHistoryIcon, label: "Audit Logs" },
+  { path: "storage-settings", Icon: CloudUploadIcon,   label: "Storage" },
 ];
 
 const DRAWER_WIDTH = 240;

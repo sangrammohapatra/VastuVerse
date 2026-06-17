@@ -10,19 +10,21 @@ import AdminContent from './AdminContent';
 import AdminFeatureFlags from './AdminFeatureFlags';
 import AdminPlans from './AdminPlans';
 import AdminAuditLogs from './AdminAuditLogs';
+import AdminStorageSettings from './AdminStorageSettings';
 
 /**
  * Admin router shell. AdminLayout renders the sidebar + Outlet.
  *
- *   /admin                → Dashboard
- *   /admin/users          → User mgmt (with architect queue tab)
- *   /admin/plans          → Plans table
- *   /admin/subscriptions  → Subscriptions + payments
- *   /admin/marketplace    → Requests + bids + commission config
- *   /admin/ai-monitoring  → Provider config + queue depth + recent failures
- *   /admin/content        → Cost datasets + municipal rules
- *   /admin/feature-flags  → Tier×Feature matrix + per-user overrides
- *   /admin/audit-logs     → Activity log viewer
+ *   /admin                  → Dashboard
+ *   /admin/users            → User mgmt (with architect queue tab)
+ *   /admin/plans            → Plans table
+ *   /admin/subscriptions    → Subscriptions + payments
+ *   /admin/marketplace      → Requests + bids + commission config
+ *   /admin/ai-monitoring    → Provider config + queue depth + recent failures
+ *   /admin/content          → Cost datasets + municipal rules
+ *   /admin/feature-flags    → Tier×Feature matrix + per-user overrides
+ *   /admin/audit-logs       → Activity log viewer
+ *   /admin/storage-settings → S3 bucket config + usage stats
  */
 export default function AdminHome() {
   return (
@@ -36,7 +38,8 @@ export default function AdminHome() {
         <Route path="ai-monitoring" element={<AdminAIMonitoring />} />
         <Route path="content"      element={<AdminContent />} />
         <Route path="feature-flags" element={<AdminFeatureFlags />} />
-        <Route path="audit-logs"   element={<AdminAuditLogs />} />
+        <Route path="audit-logs"      element={<AdminAuditLogs />} />
+        <Route path="storage-settings" element={<AdminStorageSettings />} />
       </Route>
     </Routes>
   );

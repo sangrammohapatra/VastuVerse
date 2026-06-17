@@ -16,6 +16,7 @@ const content      = require('../controllers/admin/contentController');
 const flags        = require('../controllers/admin/featureFlagsController');
 const subs         = require('../controllers/admin/subscriptionsController');
 const plans        = require('../controllers/admin/plansController');
+const storage      = require('../controllers/admin/storageSettingsController');
 
 const router = express.Router();
 
@@ -63,6 +64,11 @@ router.post('/cost-datasets/import',
 router.get('/municipal-rules',                 content.listMunicipalRules);
 router.post('/municipal-rules',                content.upsertMunicipalRule);
 router.delete('/municipal-rules/:id',          content.deleteMunicipalRule);
+
+/* ── Storage provider settings ───────────────────────────────────── */
+router.get('/storage-settings',        storage.getSettings);
+router.put('/storage-settings',        storage.saveSettings);
+router.post('/storage-settings/test',  storage.testConnection);
 
 /* ── Feature flags ────────────────────────────────────────────────── */
 router.get('/feature-flags',                                  flags.listFlags);

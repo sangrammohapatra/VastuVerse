@@ -28,6 +28,7 @@ const Redis = require('ioredis');
 const mongoose = require('mongoose');
 
 const AIServiceFactory = require('../services/ai');
+const StorageFactory = require('../services/storage');
 const { getIO } = require('../config/socket');
 
 const REDIS_URL = process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
@@ -128,8 +129,10 @@ async function processor(job) {
       const imageService = AIServiceFactory.getImageService();
       await job.updateProgress(40);
       const img = await imageService.generateImage(payload || {});
+      await job.updateProgress(75);
+      const floorPlanUrl = await StorageFactory.persistImage(img.imageUrl, `plans/${planId}/floor-plan`);
       await job.updateProgress(90);
-      result = { type, planId, ...img };
+      result = { type, planId, ...img, imageUrl: floorPlanUrl };
       break;
     }
 
@@ -139,6 +142,8 @@ async function processor(job) {
       const imageService = AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
+      await job.updateProgress(65);
+      const interiorUrl = await StorageFactory.persistImage(img.imageUrl, `plans/${planId}/interior/${roomId}`);
       await job.updateProgress(80);
 
       // Persist per-room entry under interior.rooms.{roomId}
@@ -149,7 +154,7 @@ async function processor(job) {
           {
             $set: {
               [`interior.rooms.${roomId}`]: {
-                imageUrl: img.imageUrl,
+                imageUrl: interiorUrl,
                 jobId: job.id,
                 status: 'ready',
                 provider: img.provider,
@@ -163,7 +168,7 @@ async function processor(job) {
         console.warn('[queue] failed to persist interior room:', e.message);
       }
 
-      result = { type, planId, roomId, imageUrl: img.imageUrl, provider: img.provider };
+      result = { type, planId, roomId, imageUrl: interiorUrl, provider: img.provider };
       break;
     }
 
@@ -173,6 +178,8 @@ async function processor(job) {
       const imageService = AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
+      await job.updateProgress(65);
+      const exteriorUrl = await StorageFactory.persistImage(img.imageUrl, `plans/${planId}/exterior/${side}`);
       await job.updateProgress(80);
 
       try {
@@ -182,7 +189,7 @@ async function processor(job) {
           {
             $set: {
               [`exterior.sides.${side}`]: {
-                imageUrl: img.imageUrl,
+                imageUrl: exteriorUrl,
                 jobId: job.id,
                 status: 'ready',
                 provider: img.provider,
@@ -196,7 +203,7 @@ async function processor(job) {
         console.warn('[queue] failed to persist exterior side:', e.message);
       }
 
-      result = { type, planId, side, imageUrl: img.imageUrl, provider: img.provider };
+      result = { type, planId, side, imageUrl: exteriorUrl, provider: img.provider };
       break;
     }
 
@@ -237,6 +244,8 @@ async function processor(job) {
       const imageService = AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
+      await job.updateProgress(65);
+      const birdEyeUrl = await StorageFactory.persistImage(img.imageUrl, `plans/${planId}/bird-eye`);
       await job.updateProgress(80);
 
       try {
@@ -246,7 +255,7 @@ async function processor(job) {
           {
             $set: {
               birdEyeView: {
-                imageUrl: img.imageUrl,
+                imageUrl: birdEyeUrl,
                 provider: img.provider,
                 seed: img.seed,
                 jobId: job.id,
@@ -259,7 +268,7 @@ async function processor(job) {
         console.warn('[queue] failed to persist birdEyeView:', e.message);
       }
 
-      result = { type, planId, imageUrl: img.imageUrl, provider: img.provider };
+      result = { type, planId, imageUrl: birdEyeUrl, provider: img.provider };
       break;
     }
 
