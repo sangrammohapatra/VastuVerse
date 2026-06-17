@@ -45,6 +45,8 @@ function pick(map, envKey, fallback) {
   return svc;
 }
 
+const { computeRoomRecommendation } = require("./plan/_rules");
+
 class AIServiceFactory {
   static getShapeService() {
     return pick(SHAPE_PROVIDERS, "AI_SHAPE_PROVIDER", "huggingface");
@@ -57,6 +59,14 @@ class AIServiceFactory {
   }
   static getImageService() {
     return pick(IMAGE_PROVIDERS, "AI_IMAGE_PROVIDER", "pollinations");
+  }
+  /**
+   * Returns the ideal BHK recommendation for a given landDetails object.
+   * Used in Step 2 to show the recommendation banner before the user
+   * configures rooms — no provider selection needed, always deterministic.
+   */
+  static getRoomRecommendation(landDetails) {
+    return computeRoomRecommendation(landDetails);
   }
 }
 

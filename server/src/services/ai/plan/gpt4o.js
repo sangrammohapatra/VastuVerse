@@ -1,48 +1,97 @@
 /**
- * GPT-4o (prod) plan provider.
+ * GPT-4o plan provider.
+ *
+ * Geometry is always produced by _layoutMock (zone-aware constraint solver).
+ * GPT-4o is called only to enrich each option with a variant label, summary,
+ * compliance notes, and Vastu advice — text tasks it can do reliably without
+ * producing spatially impossible coordinates.
  */
 
 const axios = require("axios");
 
 const { computeRoomSuggestions } = require("./_rules");
-const { generateFloorPlans } = require("./_layoutMock");
-const { computeColorPalettes } = require("./_palettes");
-const { generateUtilities } = require("./_utilities");
-const { estimateCost } = require("./_costEstimate");
-const { FLOOR_PLAN_SYSTEM_PROMPT } = require("../../../prompts/floorPlanPrompt");
+const { generateFloorPlans }     = require("./_layoutMock");
+const { computeColorPalettes }   = require("./_palettes");
+const { generateUtilities }      = require("./_utilities");
+const { estimateCost }           = require("./_costEstimate");
+const { FLOOR_PLAN_LABEL_PROMPT } = require("../../../prompts/floorPlanPrompt");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = process.env.OPENAI_PLAN_MODEL || "gpt-4o";
+const OPENAI_MODEL   = process.env.OPENAI_PLAN_MODEL || "gpt-4o";
 
 async function roomSuggestions(payload) { return computeRoomSuggestions(payload); }
 
 async function generateFloorPlan(payload) {
-  if (!OPENAI_API_KEY) return generateFloorPlans(payload);
+  // Geometry + feasibility check always from the constraint solver
+  const solverResult = generateFloorPlans(payload);
+
+  // Infeasible — return the structured error immediately, no LLM call needed
+  if (!solverResult.feasible) return solverResult;
+
+  if (!OPENAI_API_KEY) return solverResult;
+
   try {
+    const enrichPayload = {
+      vastuEnabled: payload.vastuEnabled || false,
+      options: solverResult.options.map((o) => ({
+        id:             o.id,
+        rooms:          o.rooms,
+        floors:         o.floors,
+        plotDimensions: o.plotDimensions,
+        totalArea:      o.totalArea,
+        ...(o.vastuScore !== undefined && { vastuScore: o.vastuScore }),
+      })),
+    };
+
     const { data } = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: OPENAI_MODEL,
+        model:           OPENAI_MODEL,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: FLOOR_PLAN_SYSTEM_PROMPT },
-          { role: "user",   content: JSON.stringify(payload) },
+          { role: "system", content: FLOOR_PLAN_LABEL_PROMPT },
+          { role: "user",   content: JSON.stringify(enrichPayload) },
         ],
       },
       {
-        timeout: 110000,
+        timeout: 30000,
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       }
     );
-    const parsed = safeParse(data?.choices?.[0]?.message?.content || "");
-    if (parsed && Array.isArray(parsed.options) && parsed.options.length === 3) return parsed;
-    return generateFloorPlans(payload);
-  } catch { return generateFloorPlans(payload); }
+
+    const labels = safeParse(data?.choices?.[0]?.message?.content || "");
+    if (labels && Array.isArray(labels.options) && labels.options.length === 3) {
+      return mergeLabels(solverResult, labels);
+    }
+  } catch {
+    // Fall through — solver result returned as-is
+  }
+
+  return solverResult;
 }
 
-async function colorPalettes(payload) { return computeColorPalettes(payload); }
+/** Merge LLM-generated text fields onto solver geometry. */
+function mergeLabels(solverResult, labels) {
+  const labelMap = Object.fromEntries(labels.options.map((o) => [o.id, o]));
+  return {
+    feasible: solverResult.feasible,
+    options: solverResult.options.map((opt) => {
+      const lbl = labelMap[opt.id];
+      if (!lbl) return opt;
+      return {
+        ...opt,
+        variant:         lbl.variant        ?? opt.variant,
+        summary:         lbl.summary        ?? opt.summary,
+        complianceNotes: lbl.complianceNotes ?? opt.complianceNotes,
+        ...(lbl.vastuAdvice && { vastuAdvice: lbl.vastuAdvice }),
+      };
+    }),
+  };
+}
+
+async function colorPalettes(payload)       { return computeColorPalettes(payload); }
 async function generateUtilityPlan(payload) { return generateUtilities(payload); }
-async function estimateCostFor(payload)    { return estimateCost(payload); }
+async function estimateCostFor(payload)     { return estimateCost(payload); }
 
 function safeParse(s) { try { return JSON.parse(s); } catch { return null; } }
 

@@ -14,7 +14,7 @@
 
 **Real-world gap:**
 
-- Professional software (ArchiCAD, Revit, Autodesk Forma) generates spatially-constrained layouts using constraint solvers, not box-packing. Rooms have adjacency rules, circulation paths, structural grids, and door swing clearances built in.
+- Professional software (ArchiCAD, Revit, Autodesk Forma) generates spatially-constrained layouts using constraint solvers, not box-packing. Rooms have adjacency rules, ventilation/circulation paths, structural grids, and door swing clearances built in.
 - LLM-generated coordinate JSON (what GPT-4o returns) has no spatial awareness. It can produce overlapping rooms, missing circulation, or dimensionally impossible layouts.
 - The layout mock assigns all rooms to `floor === 1` regardless of the floors input, meaning multi-storey plans are never correctly distributed.
 
@@ -305,7 +305,7 @@ India's Energy Conservation Building Code (ECBC 2017) and GRIHA rating system ar
 | Priority | Item | Effort | Impact | Status
 |---|---|---|---|---|
 | P0 | Fix image URL persistence (they expire) | 1 day | High — data loss | Done |
-| P0 | Align TIER_LIMITS to single source of truth | 2 hrs | High — billing integrity |
+| P0 | Align TIER_LIMITS to single source of truth | 2 hrs | High — billing integrity | Done |
 | P0 | Write rule engine unit tests | 2 days | High — liability |
 | P0 | Complete WhatsApp integration | 3 days | High — advertised feature |
 | P1 | GST invoice generation | 3 days | High — legal requirement |

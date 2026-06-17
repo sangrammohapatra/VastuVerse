@@ -1,44 +1,90 @@
 /**
- * Ollama (dev) plan provider — local llama3 via http://ollama:11434.
+ * Ollama (dev) plan provider.
  *
- * Wraps roomSuggestions, generateFloorPlan, colorPalettes, generateUtilities,
- * and estimateCost. Every method has a deterministic fallback so the wizard
- * works end-to-end without external services.
+ * Same split as gpt4o.js: geometry from _layoutMock (constraint solver),
+ * Ollama enriches labels, summary, compliance notes, and Vastu advice.
+ * Every method falls back deterministically if Ollama is unavailable.
  */
 
 const axios = require("axios");
 
 const { computeRoomSuggestions } = require("./_rules");
-const { generateFloorPlans } = require("./_layoutMock");
-const { computeColorPalettes } = require("./_palettes");
-const { generateUtilities } = require("./_utilities");
-const { estimateCost } = require("./_costEstimate");
-const { FLOOR_PLAN_SYSTEM_PROMPT } = require("../../../prompts/floorPlanPrompt");
+const { generateFloorPlans }     = require("./_layoutMock");
+const { computeColorPalettes }   = require("./_palettes");
+const { generateUtilities }      = require("./_utilities");
+const { estimateCost }           = require("./_costEstimate");
+const { FLOOR_PLAN_LABEL_PROMPT } = require("../../../prompts/floorPlanPrompt");
 
-const OLLAMA_URL = process.env.OLLAMA_URL || "";
+const OLLAMA_URL   = process.env.OLLAMA_URL   || "";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3";
 
 async function roomSuggestions(payload) { return computeRoomSuggestions(payload); }
 
 async function generateFloorPlan(payload) {
-  if (!OLLAMA_URL) return generateFloorPlans(payload);
+  const solverResult = generateFloorPlans(payload);
+
+  // Infeasible — return the structured error immediately, no LLM call needed
+  if (!solverResult.feasible) return solverResult;
+
+  if (!OLLAMA_URL) return solverResult;
+
   try {
+    const enrichPayload = {
+      vastuEnabled: payload.vastuEnabled || false,
+      options: solverResult.options.map((o) => ({
+        id:             o.id,
+        rooms:          o.rooms,
+        floors:         o.floors,
+        plotDimensions: o.plotDimensions,
+        totalArea:      o.totalArea,
+        ...(o.vastuScore !== undefined && { vastuScore: o.vastuScore }),
+      })),
+    };
+
     const { data } = await axios.post(
       `${OLLAMA_URL}/api/generate`,
-      { model: OLLAMA_MODEL, system: FLOOR_PLAN_SYSTEM_PROMPT, prompt: JSON.stringify(payload), format: "json", stream: false },
-      { timeout: 110000 }
+      {
+        model:  OLLAMA_MODEL,
+        system: FLOOR_PLAN_LABEL_PROMPT,
+        prompt: JSON.stringify(enrichPayload),
+        format: "json",
+        stream: false,
+      },
+      { timeout: 90000 }
     );
-    const parsed = safeParse(data?.response || "");
-    if (parsed && Array.isArray(parsed.options) && parsed.options.length === 3) return parsed;
-    return generateFloorPlans(payload);
-  } catch { return generateFloorPlans(payload); }
+
+    const labels = safeParse(data?.response || "");
+    if (labels && Array.isArray(labels.options) && labels.options.length === 3) {
+      return mergeLabels(solverResult, labels);
+    }
+  } catch {
+    // Fall through — solver result returned as-is
+  }
+
+  return solverResult;
 }
 
-async function colorPalettes(payload) { return computeColorPalettes(payload); }
+function mergeLabels(solverResult, labels) {
+  const labelMap = Object.fromEntries(labels.options.map((o) => [o.id, o]));
+  return {
+    feasible: solverResult.feasible,
+    options: solverResult.options.map((opt) => {
+      const lbl = labelMap[opt.id];
+      if (!lbl) return opt;
+      return {
+        ...opt,
+        variant:         lbl.variant        ?? opt.variant,
+        summary:         lbl.summary        ?? opt.summary,
+        complianceNotes: lbl.complianceNotes ?? opt.complianceNotes,
+        ...(lbl.vastuAdvice && { vastuAdvice: lbl.vastuAdvice }),
+      };
+    }),
+  };
+}
 
-// Utilities + cost are deterministic; the LLM adds no value.
+async function colorPalettes(payload)       { return computeColorPalettes(payload); }
 async function generateUtilityPlan(payload) { return generateUtilities(payload); }
-async function estimateCostFor(payload)    { return estimateCost(payload); }
+async function estimateCostFor(payload)     { return estimateCost(payload); }
 
 function safeParse(s) { try { return JSON.parse(s); } catch { return null; } }
 
