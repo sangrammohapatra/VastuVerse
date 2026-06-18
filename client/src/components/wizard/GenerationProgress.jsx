@@ -41,7 +41,7 @@ export default function GenerationProgress({
     <Box
       sx={{
         p: { xs: 3, md: 5 },
-        borderRadius: 4,
+        borderRadius: 2,
         background: theme.vastu.cardBg,
         border: theme.vastu.cardBorder,
         backdropFilter: theme.vastu.cardBlur,
@@ -104,7 +104,7 @@ export default function GenerationProgress({
           backgroundColor:
             theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(26,26,46,0.08)',
           '& .MuiLinearProgress-bar': {
-            borderRadius: 4,
+            borderRadius: 2,
             background: theme.vastu.gradientBrand,
           },
         }}

@@ -222,28 +222,54 @@ function scaleRoomsToFit(rooms, plotW, plotH) {
 function expandToFillPlot(placed, plotW, plotH) {
   const rooms = placed.map((r) => ({ ...r }));
 
+  // Pass 1 — expand right
   rooms.sort((a, b) => a.x - b.x);
   for (const r of rooms) {
     let right = plotW;
     for (const o of rooms) {
       if (o === r) continue;
-      if (o.x >= r.x + r.w && o.x < right) {
-        if (o.y < r.y + r.h && o.y + o.h > r.y) right = o.x;
-      }
+      if (o.x >= r.x + r.w && o.x < right &&
+          o.y < r.y + r.h && o.y + o.h > r.y) right = o.x;
     }
     r.w = right - r.x;
   }
 
+  // Pass 2 — expand down
   rooms.sort((a, b) => a.y - b.y);
   for (const r of rooms) {
     let bottom = plotH;
     for (const o of rooms) {
       if (o === r) continue;
-      if (o.y >= r.y + r.h && o.y < bottom) {
-        if (o.x < r.x + r.w && o.x + o.w > r.x) bottom = o.y;
-      }
+      if (o.y >= r.y + r.h && o.y < bottom &&
+          o.x < r.x + r.w && o.x + o.w > r.x) bottom = o.y;
     }
     r.h = bottom - r.y;
+  }
+
+  // Pass 3 — expand left (absorb left-side gaps)
+  rooms.sort((a, b) => b.x - a.x);
+  for (const r of rooms) {
+    let left = 0;
+    for (const o of rooms) {
+      if (o === r) continue;
+      if (o.x + o.w <= r.x && o.x + o.w > left &&
+          o.y < r.y + r.h && o.y + o.h > r.y) left = o.x + o.w;
+    }
+    r.w += r.x - left;
+    r.x = left;
+  }
+
+  // Pass 4 — expand up (absorb top-side gaps)
+  rooms.sort((a, b) => b.y - a.y);
+  for (const r of rooms) {
+    let top = 0;
+    for (const o of rooms) {
+      if (o === r) continue;
+      if (o.y + o.h <= r.y && o.y + o.h > top &&
+          o.x < r.x + r.w && o.x + o.w > r.x) top = o.y + o.h;
+    }
+    r.h += r.y - top;
+    r.y = top;
   }
 
   return rooms;

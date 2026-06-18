@@ -217,7 +217,9 @@ function solveFloor(rooms, plotW, plotH, variantIdx, vastuEnabled, prePlaced = [
       if (result) {
         placed.push(result);
       } else {
-        unplaced.push(room);
+        // Circulation gap couldn't be satisfied — place without gap rather than drop the room
+        const forced = forcePlaceAnywhere(room, plotW, plotH, placed);
+        placed.push(forced);
       }
     }
 
