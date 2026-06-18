@@ -153,11 +153,20 @@ function getZonePriority(kind, variantIdx) {
 
 // ── Room sorting ──────────────────────────────────────────────────────────
 
+// Vastu variant: rooms with a strict single-zone mandate are placed first so
+// they claim their ideal zone before larger generic rooms crowd it out.
+const VASTU_PLACEMENT_ORDER = { pooja: 0, kitchen: 1, bedroom: 2, bathroomCommon: 3 };
+
 function sortAndPair(rooms, variantIdx, attempt) {
   const nonBath = rooms.filter((r) => r.kind !== 'bathroomAttached');
   const baths   = [...rooms.filter((r) => r.kind === 'bathroomAttached')];
 
   nonBath.sort((a, b) => {
+    if (variantIdx === 0) {
+      const pa = VASTU_PLACEMENT_ORDER[a.kind] ?? 99;
+      const pb = VASTU_PLACEMENT_ORDER[b.kind] ?? 99;
+      if (pa !== pb) return pa - pb;
+    }
     const areaDiff = (b.w * b.h) - (a.w * a.h);
     return attempt % 2 === 0 ? areaDiff : -areaDiff;
   });
