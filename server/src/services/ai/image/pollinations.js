@@ -6,12 +6,13 @@
  * No API key required.
  */
 
-const BASE = process.env.POLLINATIONS_URL || 'https://image.pollinations.ai/prompt';
+const DEFAULT_BASE = process.env.POLLINATIONS_URL || 'https://image.pollinations.ai/prompt';
 
-async function generateImage({ prompt, seed }) {
+async function generateImage({ prompt, seed }, cfg = {}) {
+  const base = cfg.pollinationsUrl || DEFAULT_BASE;
   const safePrompt = String(prompt || 'modern Indian house floor plan top view');
   const s = Number.isFinite(Number(seed)) ? Number(seed) : Math.floor(Math.random() * 1e6);
-  const url = `${BASE}/${encodeURIComponent(safePrompt)}?seed=${s}&width=768&height=768&nologo=true`;
+  const url = `${base}/${encodeURIComponent(safePrompt)}?seed=${s}&width=768&height=768&nologo=true`;
   return { imageUrl: url, provider: 'pollinations', seed: s };
 }
 

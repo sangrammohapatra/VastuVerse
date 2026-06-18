@@ -11,6 +11,7 @@ import AdminFeatureFlags from './AdminFeatureFlags';
 import AdminPlans from './AdminPlans';
 import AdminAuditLogs from './AdminAuditLogs';
 import AdminStorageSettings from './AdminStorageSettings';
+import AdminAISettings from './AdminAISettings';
 
 /**
  * Admin router shell. AdminLayout renders the sidebar + Outlet.
@@ -40,6 +41,7 @@ export default function AdminHome() {
         <Route path="feature-flags" element={<AdminFeatureFlags />} />
         <Route path="audit-logs"      element={<AdminAuditLogs />} />
         <Route path="storage-settings" element={<AdminStorageSettings />} />
+        <Route path="ai-settings"      element={<AdminAISettings />} />
       </Route>
     </Routes>
   );

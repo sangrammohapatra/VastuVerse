@@ -16,19 +16,22 @@ const { generateUtilities }      = require("./_utilities");
 const { estimateCost }           = require("./_costEstimate");
 const { FLOOR_PLAN_LABEL_PROMPT } = require("../../../prompts/floorPlanPrompt");
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL   = process.env.OPENAI_PLAN_MODEL || "gpt-4o";
+const DEFAULT_OPENAI_KEY   = process.env.OPENAI_API_KEY    || "";
+const DEFAULT_OPENAI_MODEL = process.env.OPENAI_PLAN_MODEL || "gpt-4o";
 
 async function roomSuggestions(payload) { return computeRoomSuggestions(payload); }
 
-async function generateFloorPlan(payload) {
+async function generateFloorPlan(payload, cfg = {}) {
+  const apiKey = cfg.openaiApiKey    || DEFAULT_OPENAI_KEY;
+  const model  = cfg.openaiPlanModel || DEFAULT_OPENAI_MODEL;
+
   // Geometry + feasibility check always from the constraint solver
   const solverResult = generateFloorPlans(payload);
 
   // Infeasible — return the structured error immediately, no LLM call needed
   if (!solverResult.feasible) return solverResult;
 
-  if (!OPENAI_API_KEY) return solverResult;
+  if (!apiKey) return solverResult;
 
   try {
     const enrichPayload = {
@@ -46,7 +49,7 @@ async function generateFloorPlan(payload) {
     const { data } = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model:           OPENAI_MODEL,
+        model,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: FLOOR_PLAN_LABEL_PROMPT },
@@ -55,7 +58,7 @@ async function generateFloorPlan(payload) {
       },
       {
         timeout: 30000,
-        headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       }
     );
 

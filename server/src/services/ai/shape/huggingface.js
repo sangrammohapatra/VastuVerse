@@ -11,11 +11,13 @@
 
 const axios = require('axios');
 
-const HF_API_BASE = 'https://api-inference.huggingface.co/models';
-const HF_MODEL = process.env.HUGGINGFACE_SHAPE_MODEL || 'facebook/detr-resnet-50-panoptic';
+const HF_API_BASE     = 'https://api-inference.huggingface.co/models';
+const DEFAULT_HF_MODEL = process.env.HUGGINGFACE_SHAPE_MODEL || 'facebook/detr-resnet-50-panoptic';
+const DEFAULT_HF_KEY   = process.env.HUGGINGFACE_API_KEY     || '';
 
-async function recognizeShape(imageBuffer, mimeType) {
-  const apiKey = process.env.HUGGINGFACE_API_KEY;
+async function recognizeShape(imageBuffer, mimeType, cfg = {}) {
+  const apiKey = cfg.huggingfaceApiKey     || DEFAULT_HF_KEY;
+  const model  = cfg.huggingfaceShapeModel || DEFAULT_HF_MODEL;
 
   if (!apiKey) {
     // Dev fallback — deterministic so screenshots are stable.
@@ -35,7 +37,7 @@ async function recognizeShape(imageBuffer, mimeType) {
   // Live call (best-effort scaffold — refine with the model's actual response shape).
   try {
     const response = await axios.post(
-      `${HF_API_BASE}/${encodeURIComponent(HF_MODEL)}`,
+      `${HF_API_BASE}/${encodeURIComponent(model)}`,
       imageBuffer,
       {
         headers: {

@@ -15,18 +15,21 @@ const { generateUtilities }      = require("./_utilities");
 const { estimateCost }           = require("./_costEstimate");
 const { FLOOR_PLAN_LABEL_PROMPT } = require("../../../prompts/floorPlanPrompt");
 
-const OLLAMA_URL   = process.env.OLLAMA_URL   || "";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3";
+const DEFAULT_OLLAMA_URL   = process.env.OLLAMA_URL   || "";
+const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3";
 
 async function roomSuggestions(payload) { return computeRoomSuggestions(payload); }
 
-async function generateFloorPlan(payload) {
+async function generateFloorPlan(payload, cfg = {}) {
+  const ollamaUrl   = cfg.ollamaUrl   || DEFAULT_OLLAMA_URL;
+  const ollamaModel = cfg.ollamaModel || DEFAULT_OLLAMA_MODEL;
+
   const solverResult = generateFloorPlans(payload);
 
   // Infeasible — return the structured error immediately, no LLM call needed
   if (!solverResult.feasible) return solverResult;
 
-  if (!OLLAMA_URL) return solverResult;
+  if (!ollamaUrl) return solverResult;
 
   try {
     const enrichPayload = {
@@ -42,9 +45,9 @@ async function generateFloorPlan(payload) {
     };
 
     const { data } = await axios.post(
-      `${OLLAMA_URL}/api/generate`,
+      `${ollamaUrl}/api/generate`,
       {
-        model:  OLLAMA_MODEL,
+        model:  ollamaModel,
         system: FLOOR_PLAN_LABEL_PROMPT,
         prompt: JSON.stringify(enrichPayload),
         format: "json",

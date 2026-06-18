@@ -11,8 +11,10 @@
 
 const axios = require('axios');
 
-async function recognizeShape(imageBuffer, mimeType) {
-  const apiKey = process.env.GOOGLE_VISION_API_KEY;
+const DEFAULT_GV_KEY = process.env.GOOGLE_VISION_API_KEY || '';
+
+async function recognizeShape(imageBuffer, mimeType, cfg = {}) {
+  const apiKey = cfg.googleVisionApiKey || DEFAULT_GV_KEY;
 
   if (!apiKey) {
     return {

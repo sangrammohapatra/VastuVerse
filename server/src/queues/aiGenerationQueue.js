@@ -96,7 +96,7 @@ async function processor(job) {
   let result;
   switch (type) {
     case 'floor-plan': {
-      const planService = AIServiceFactory.getPlanService();
+      const planService = await AIServiceFactory.getPlanService();
       await job.updateProgress(20);
       const planOut = await planService.generateFloorPlan(payload || {});
       await job.updateProgress(80);
@@ -132,7 +132,7 @@ async function processor(job) {
     }
 
     case 'floor-plan-image': {
-      const imageService = AIServiceFactory.getImageService();
+      const imageService = await AIServiceFactory.getImageService();
       await job.updateProgress(40);
       const img = await imageService.generateImage(payload || {});
       await job.updateProgress(75);
@@ -145,7 +145,7 @@ async function processor(job) {
     case 'interior-render': {
       const { roomId, prompt, seed } = payload || {};
       if (!roomId || !prompt) throw new Error('interior_render_missing_inputs');
-      const imageService = AIServiceFactory.getImageService();
+      const imageService = await AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
       await job.updateProgress(65);
@@ -181,7 +181,7 @@ async function processor(job) {
     case 'exterior-render': {
       const { side, prompt, seed } = payload || {};
       if (!side || !prompt) throw new Error('exterior_render_missing_inputs');
-      const imageService = AIServiceFactory.getImageService();
+      const imageService = await AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
       await job.updateProgress(65);
@@ -217,7 +217,7 @@ async function processor(job) {
       // Deterministic rule engine — quick but routed through the queue so
       // the wizard gets a consistent loading state + counts toward the
       // user's daily quota.
-      const planService = AIServiceFactory.getPlanService();
+      const planService = await AIServiceFactory.getPlanService();
       await job.updateProgress(20);
       const utilOut = await planService.generateUtilityPlan(payload || {});
       await job.updateProgress(80);
@@ -247,7 +247,7 @@ async function processor(job) {
     case 'bird-eye-3d': {
       const { prompt, seed } = payload || {};
       if (!prompt) throw new Error('bird_eye_missing_prompt');
-      const imageService = AIServiceFactory.getImageService();
+      const imageService = await AIServiceFactory.getImageService();
       await job.updateProgress(30);
       const img = await imageService.generateImage({ prompt, seed });
       await job.updateProgress(65);

@@ -17,6 +17,7 @@ const flags        = require('../controllers/admin/featureFlagsController');
 const subs         = require('../controllers/admin/subscriptionsController');
 const plans        = require('../controllers/admin/plansController');
 const storage      = require('../controllers/admin/storageSettingsController');
+const aiSettings   = require('../controllers/admin/aiSettingsController');
 const tierLimits   = require('../controllers/admin/tierLimitsController');
 
 const router = express.Router();
@@ -74,6 +75,11 @@ router.put('/tier-limits',  tierLimits.saveLimits);
 router.get('/storage-settings',        storage.getSettings);
 router.put('/storage-settings',        storage.saveSettings);
 router.post('/storage-settings/test',  storage.testConnection);
+
+/* ── AI provider settings ─────────────────────────────────────────── */
+router.get('/ai-settings',        aiSettings.getSettings);
+router.put('/ai-settings',        aiSettings.saveSettings);
+router.post('/ai-settings/test',  aiSettings.testConnection);
 
 /* ── Feature flags ────────────────────────────────────────────────── */
 router.get('/feature-flags',                                  flags.listFlags);

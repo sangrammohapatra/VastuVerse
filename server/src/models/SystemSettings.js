@@ -7,6 +7,9 @@
  *
  * Current keys:
  *   'storage' — { provider, cloudinaryUrl, s3Bucket, s3Region, s3AccessKeyId, s3SecretAccessKey }
+ *   'ai'      — { planProvider, imageProvider, shapeProvider, openaiApiKey, openaiPlanModel,
+ *                 openaiImageModel, ollamaUrl, ollamaModel, huggingfaceApiKey,
+ *                 huggingfaceShapeModel, googleVisionApiKey, pollinationsUrl }
  */
 
 const mongoose = require('mongoose');

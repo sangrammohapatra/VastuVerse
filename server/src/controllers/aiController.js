@@ -41,7 +41,7 @@ const DAILY_LIMIT_TTL = 86400;            // 24 h
 exports.shapeRecognition = async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: "image_required" });
-    const service = AIServiceFactory.getShapeService();
+    const service = await AIServiceFactory.getShapeService();
     const result = await service.recognizeShape(req.file.buffer, req.file.mimetype);
     res.json({
       polygon: Array.isArray(result.polygon) ? result.polygon : [],
@@ -81,7 +81,7 @@ exports.roomSuggestions = async (req, res, next) => {
       if (cached) return res.json({ ...JSON.parse(cached), cached: true });
     } catch (e) { console.warn("[ai] redis read failed:", e.message); }
 
-    const service = AIServiceFactory.getRoomSuggestionService();
+    const service = await AIServiceFactory.getRoomSuggestionService();
     const result = await service.roomSuggestions({ roomConfig, landDetails, vastuEnabled });
 
     try { await redis.set(cacheKey, JSON.stringify(result), "EX", ROOM_SUGGESTION_TTL); }
@@ -187,7 +187,7 @@ exports.colorPalettes = async (req, res, next) => {
       if (cached) return res.json({ ...JSON.parse(cached), cached: true });
     } catch (e) { /* fall through */ }
 
-    const service = AIServiceFactory.getRoomSuggestionService(); // re-uses AI_PLAN_PROVIDER
+    const service = await AIServiceFactory.getRoomSuggestionService();
     const result = await service.colorPalettes({ style, vastuEnabled });
 
     try { await redis.set(cacheKey, JSON.stringify(result), "EX", PALETTE_TTL); }
