@@ -7,7 +7,6 @@
  */
 
 const axios = require('axios');
-const crypto = require('crypto');
 const SystemSettings = require('../../models/SystemSettings');
 const StorageFactory = require('../../services/storage');
 
@@ -114,13 +113,10 @@ async function testConnection(req, res) {
 
       const { apiKey, apiSecret, cloudName } = parseCloudinaryUrl(url);
 
-      // Signed request to list resources (0 results is fine — we just need a 200)
-      const timestamp = Math.floor(Date.now() / 1000);
-      const sigStr = `max_results=1&timestamp=${timestamp}${apiSecret}`;
-      const signature = crypto.createHash('sha1').update(sigStr).digest('hex');
-
+      // Admin API uses HTTP Basic Auth (api_key:api_secret), not query-string signatures
       await axios.get(`https://api.cloudinary.com/v1_1/${cloudName}/resources/image`, {
-        params: { max_results: 1, timestamp, api_key: apiKey, signature },
+        params: { max_results: 1 },
+        auth: { username: apiKey, password: apiSecret },
         timeout: 10_000,
       });
 
