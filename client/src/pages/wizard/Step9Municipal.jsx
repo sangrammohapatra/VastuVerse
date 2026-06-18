@@ -11,6 +11,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ReplayIcon from '@mui/icons-material/Replay';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { api } from '../../utils/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
@@ -321,6 +322,33 @@ function Step9Body({ planId, value, onChange }) {
               Checks your plan against National Building Code defaults and (when available) your local
               ULB bye-laws. Each line item expands to show the source rule.
             </Typography>
+            {hasReport && (
+              <Chip
+                size="small"
+                icon={<InfoOutlinedIcon fontSize="small" />}
+                label={
+                  report.applicable
+                    ? `Based on ${report.ruleSetVersion}`
+                    : `Based on NBC 2016 defaults — ${report.city || 'your city'} not yet in dataset`
+                }
+                sx={{
+                  mt: 1.2,
+                  fontWeight: 600,
+                  fontSize: '0.72rem',
+                  ...(report.applicable
+                    ? {
+                        background: 'rgba(46,125,50,0.10)',
+                        color: 'success.dark',
+                        border: '1px solid rgba(46,125,50,0.25)',
+                      }
+                    : {
+                        background: 'rgba(237,108,2,0.10)',
+                        color: 'warning.dark',
+                        border: '1px solid rgba(237,108,2,0.25)',
+                      }),
+                }}
+              />
+            )}
           </Box>
 
           <Stack direction="row" spacing={1.2} alignItems="center">

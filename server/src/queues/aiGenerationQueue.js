@@ -121,7 +121,13 @@ async function processor(job) {
         console.warn('[queue] failed to persist floorPlan:', e.message);
       }
 
-      result = { type, planId, options: planOut.options };
+      result = {
+        type,
+        planId,
+        feasible: planOut.feasible,
+        options: planOut.options,
+        ...(planOut.error && { error: planOut.error }),
+      };
       break;
     }
 

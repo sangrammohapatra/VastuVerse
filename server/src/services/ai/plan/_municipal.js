@@ -297,21 +297,39 @@ function checkRoadWidth(plan, plotSqft, eff) {
   const required = Number(eff.roadWidthRequired)
     || NBC_DEFAULTS.minRoadWidthMByPlotSqm.find(([max]) => plotSqm <= max)[1];
 
-  // We don't capture actual road width in the wizard — flag as user-verify.
+  const capturedM = Number(plan.landDetails?.roadWidthM) || null;
+  const ref = {
+    code: eff.hasCityData ? `${eff.dataSource} — road width schedule` : 'State DCR / Master Plan',
+    text:
+      'Plots up to 200 m² typically need a 6 m road; up to 500 m² need 7.5 m; above 500 m² need 9 m. ' +
+      'Plots on private/cul-de-sac roads have separate rules.',
+  };
+
+  if (!capturedM) {
+    return {
+      id: 'road',
+      label: 'Minimum abutting road width',
+      status: 'warning',
+      severity: 'medium',
+      summary: `Plot must abut a road of at least ${required} m. Enter the road width in Step 1 for an exact check.`,
+      actual: { providedM: null },
+      required: { minM: required },
+      reference: ref,
+    };
+  }
+
+  const ok = capturedM >= required;
   return {
     id: 'road',
     label: 'Minimum abutting road width',
-    status: 'warning',
-    severity: 'medium',
-    summary: `Plot must abut a road of at least ${required} m. Please confirm at site or via local survey.`,
-    actual: { providedM: null },
+    status: ok ? 'pass' : 'fail',
+    severity: ok ? 'low' : 'high',
+    summary: ok
+      ? `Road width ${capturedM} m meets the ${required} m minimum for this plot size.`
+      : `Road width ${capturedM} m is below the required ${required} m. Building permission is likely to be denied.`,
+    actual: { providedM: capturedM },
     required: { minM: required },
-    reference: {
-      code: eff.hasCityData ? `${eff.dataSource} — road width schedule` : 'State DCR / Master Plan',
-      text:
-        'Plots up to 200 m² typically need a 6 m road; up to 500 m² need 7.5 m; above 500 m² need 9 m. ' +
-        'Plots on private/cul-de-sac roads have separate rules.',
-    },
+    reference: ref,
   };
 }
 

@@ -411,6 +411,26 @@ export default function Step1Land({ value, onChange }) {
             </FormControl>
           </Box>
 
+          <Box sx={{ mt: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel id="step1-road-width">Abutting road width</InputLabel>
+              <Select
+                labelId="step1-road-width"
+                label="Abutting road width"
+                value={land.roadWidthM ?? ""}
+                onChange={(e) => patchLand({ roadWidthM: e.target.value })}
+              >
+                <MenuItem value={6}>6 m — single-lane / internal road</MenuItem>
+                <MenuItem value={9}>9 m — collector road</MenuItem>
+                <MenuItem value={12}>12 m — arterial road</MenuItem>
+                <MenuItem value={18}>18 m+ — major road / highway</MenuItem>
+              </Select>
+              <FormHelperText>
+                Road width from plot boundary — affects permissible FSI in many cities.
+              </FormHelperText>
+            </FormControl>
+          </Box>
+
           <AnimatePresence>
             {muniStatus === "loading" && (
               <motion.div

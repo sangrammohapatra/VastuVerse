@@ -126,9 +126,12 @@ export default function Step3FloorPlan({ value, onChange }) {
 
   /* ─── Result handler ──────────────────────────────────────────────── */
   const handleResult = (result) => {
-    if (!result?.options) {
+    if (!result?.options?.length) {
       setPhase('error');
-      setError('No options returned');
+      setError(
+        result?.error?.message ||
+        'No floor plan options could be generated. Check your room configuration and plot area, then try again.'
+      );
       return;
     }
     setProgress(100);
