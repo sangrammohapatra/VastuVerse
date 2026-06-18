@@ -1,84 +1,161 @@
 /**
  * GPT-4o plan provider.
  *
- * Geometry is always produced by _layoutMock (zone-aware constraint solver).
- * GPT-4o is called only to enrich each option with a variant label, summary,
- * compliance notes, and Vastu advice — text tasks it can do reliably without
- * producing spatially impossible coordinates.
+ * floorPlanMode = 'ai'     → LLM generates room coordinates (FLOOR_PLAN_SYSTEM_PROMPT).
+ *                            If the LLM returns invalid geometry, falls back to solver.
+ * floorPlanMode = 'solver' → Constraint solver generates geometry (default).
+ *
+ * In both modes the LLM is called a second time (FLOOR_PLAN_LABEL_PROMPT) to enrich
+ * each option with a variant label, summary, compliance notes, and Vastu advice —
+ * but only if an OpenAI API key is present.
  */
 
-const axios = require("axios");
+const axios = require('axios');
 
-const { computeRoomSuggestions } = require("./_rules");
-const { generateFloorPlans }     = require("./_layoutMock");
-const { computeColorPalettes }   = require("./_palettes");
-const { generateUtilities }      = require("./_utilities");
-const { estimateCost }           = require("./_costEstimate");
-const { FLOOR_PLAN_LABEL_PROMPT } = require("../../../prompts/floorPlanPrompt");
+const { computeRoomSuggestions }   = require('./_rules');
+const { generateFloorPlans,
+        buildRoomSpecs,
+        distributeRoomsToFloors,
+        scaleRoomsToFit }          = require('./_layoutMock');
+const { generateFloorPlanWithAI }  = require('./_aiLayoutGenerator');
+const { computeColorPalettes }     = require('./_palettes');
+const { generateUtilities }        = require('./_utilities');
+const { estimateCost }             = require('./_costEstimate');
+const { FLOOR_PLAN_LABEL_PROMPT }  = require('../../../prompts/floorPlanPrompt');
 
-const DEFAULT_OPENAI_KEY   = process.env.OPENAI_API_KEY    || "";
-const DEFAULT_OPENAI_MODEL = process.env.OPENAI_PLAN_MODEL || "gpt-4o";
+const DEFAULT_OPENAI_KEY   = process.env.OPENAI_API_KEY    || '';
+const DEFAULT_OPENAI_MODEL = process.env.OPENAI_PLAN_MODEL || 'gpt-4o';
+
+const SQM_TO_SQFT = 10.7639;
+
+function toSqft(area, unit) {
+  if (!area) return 0;
+  if (unit === 'sqm')  return area * SQM_TO_SQFT;
+  if (unit === 'sqyd') return area * 9;
+  return area;
+}
 
 async function roomSuggestions(payload) { return computeRoomSuggestions(payload); }
 
 async function generateFloorPlan(payload, cfg = {}) {
-  const apiKey = cfg.openaiApiKey    || DEFAULT_OPENAI_KEY;
-  const model  = cfg.openaiPlanModel || DEFAULT_OPENAI_MODEL;
+  const apiKey      = cfg.openaiApiKey    || DEFAULT_OPENAI_KEY;
+  const model       = cfg.openaiPlanModel || DEFAULT_OPENAI_MODEL;
+  const aiMode      = cfg.floorPlanMode === 'ai';
 
-  // Geometry + feasibility check always from the constraint solver
-  const solverResult = generateFloorPlans(payload);
+  let result = null;
 
-  // Infeasible — return the structured error immediately, no LLM call needed
-  if (!solverResult.feasible) return solverResult;
+  // ── AI geometry mode ────────────────────────────────────────────────────
+  if (aiMode && apiKey) {
+    result = await tryAiLayout(payload, cfg);
+  }
 
-  if (!apiKey) return solverResult;
+  // ── Solver fallback (always used if AI mode off or AI failed) ───────────
+  if (!result) {
+    result = generateFloorPlans(payload);
+  }
+
+  if (!result.feasible) return result;
+
+  // ── Label enrichment (LLM text pass) ────────────────────────────────────
+  if (!apiKey) return result;
 
   try {
-    const enrichPayload = {
-      vastuEnabled: payload.vastuEnabled || false,
-      options: solverResult.options.map((o) => ({
-        id:             o.id,
-        rooms:          o.rooms,
-        floors:         o.floors,
-        plotDimensions: o.plotDimensions,
-        totalArea:      o.totalArea,
-        ...(o.vastuScore !== undefined && { vastuScore: o.vastuScore }),
-      })),
-    };
-
+    const enrichPayload = buildEnrichPayload(payload, result);
     const { data } = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
+      'https://api.openai.com/v1/chat/completions',
       {
         model,
-        response_format: { type: "json_object" },
+        response_format: { type: 'json_object' },
         messages: [
-          { role: "system", content: FLOOR_PLAN_LABEL_PROMPT },
-          { role: "user",   content: JSON.stringify(enrichPayload) },
+          { role: 'system', content: FLOOR_PLAN_LABEL_PROMPT },
+          { role: 'user',   content: JSON.stringify(enrichPayload) },
         ],
       },
       {
-        timeout: 30000,
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        timeout: 30_000,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       }
     );
 
-    const labels = safeParse(data?.choices?.[0]?.message?.content || "");
+    const labels = safeParse(data?.choices?.[0]?.message?.content || '');
     if (labels && Array.isArray(labels.options) && labels.options.length === 3) {
-      return mergeLabels(solverResult, labels);
+      return mergeLabels(result, labels);
     }
-  } catch {
-    // Fall through — solver result returned as-is
+  } catch (err) {
+    const errCode = err?.response?.data?.error?.code || err?.response?.data?.error?.type || '';
+    const apiMsg  = err?.response?.data?.error?.message || err.message;
+    if (errCode === 'insufficient_quota' || errCode === 'billing_hard_limit_reached') {
+      console.error(`[gpt4o enrichment] OpenAI quota error (${errCode}): ${apiMsg}`);
+    } else {
+      console.warn(`[gpt4o enrichment] Label call failed: ${apiMsg}`);
+    }
   }
 
-  return solverResult;
+  return result;
 }
 
-/** Merge LLM-generated text fields onto solver geometry. */
-function mergeLabels(solverResult, labels) {
+/** Attempt AI geometry generation; returns null on failure so caller can fallback. */
+async function tryAiLayout(payload, cfg) {
+  try {
+    const { roomConfig = {}, landDetails = {}, vastuEnabled = false } = payload;
+
+    const areaSqft    = toSqft(Number(landDetails.area) || 0, landDetails.unit || 'sqft');
+    const floors      = Math.max(1, Number(landDetails.floors) || 1);
+    const fsi         = Number(landDetails.fsi) || 1.5;
+    const perFloorBUA = (areaSqft * fsi) / floors;
+    const side        = Math.max(20, Math.round(Math.sqrt(perFloorBUA)));
+    const setbackFront = 5;
+    const setbackSide  = 3;
+    const plotW = Math.max(15, side - setbackSide * 2);
+    const plotH = Math.max(15, side - setbackFront - setbackSide);
+
+    const baseRooms = buildRoomSpecs(roomConfig);
+    if (floors > 1 && !baseRooms.some((r) => r.kind === 'staircase')) {
+      const { ROOM_SPEC, COLORS } = require('./_layoutMock');
+      baseRooms.push({ id: 'stair-1', kind: 'staircase', label: 'Staircase', ...ROOM_SPEC.staircase, color: COLORS.staircase });
+    }
+
+    const floorBuckets    = distributeRoomsToFloors(baseRooms, roomConfig.floorAssignments, floors);
+    const groundFloorRooms = scaleRoomsToFit(floorBuckets[0], plotW, plotH);
+    const upperFloorBuckets = floorBuckets.slice(1).map((b) => scaleRoomsToFit(b, plotW, plotH));
+
+    return await generateFloorPlanWithAI({
+      payload,
+      cfg,
+      plotW,
+      plotH,
+      floors,
+      side,
+      setbackFront,
+      setbackSide,
+      groundFloorRooms,
+      upperFloorBuckets,
+    });
+  } catch (err) {
+    console.error('[gpt4o] AI layout error:', err.message);
+    return null;
+  }
+}
+
+function buildEnrichPayload(payload, result) {
+  return {
+    vastuEnabled: payload.vastuEnabled || false,
+    options: result.options.map((o) => ({
+      id:             o.id,
+      rooms:          o.rooms,
+      floors:         o.floors,
+      plotDimensions: o.plotDimensions,
+      totalArea:      o.totalArea,
+      ...(o.vastuScore !== undefined && { vastuScore: o.vastuScore }),
+    })),
+  };
+}
+
+function mergeLabels(result, labels) {
   const labelMap = Object.fromEntries(labels.options.map((o) => [o.id, o]));
   return {
-    feasible: solverResult.feasible,
-    options: solverResult.options.map((opt) => {
+    feasible: result.feasible,
+    options: result.options.map((opt) => {
       const lbl = labelMap[opt.id];
       if (!lbl) return opt;
       return {

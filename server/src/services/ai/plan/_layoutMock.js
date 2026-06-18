@@ -421,4 +421,12 @@ function generateFloorPlans({ roomConfig = {}, landDetails = {}, vastuEnabled = 
   return { feasible: true, options };
 }
 
-module.exports = { generateFloorPlans, COLORS, ROOM_SPEC };
+module.exports = {
+  generateFloorPlans,
+  COLORS,
+  ROOM_SPEC,
+  buildRoomSpecs,
+  distributeRoomsToFloors,
+  scaleRoomsToFit,
+  expandToFillPlot,
+};

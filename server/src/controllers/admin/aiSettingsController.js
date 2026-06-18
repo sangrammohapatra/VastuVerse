@@ -35,6 +35,7 @@ async function getSettings(req, res) {
 
     res.json({
       planProvider:          v.planProvider          || 'ollama',
+      floorPlanMode:         v.floorPlanMode         || 'solver',
       imageProvider:         v.imageProvider         || 'pollinations',
       shapeProvider:         v.shapeProvider         || 'huggingface',
       openaiApiKey:          maskSecret(v.openaiApiKey),
@@ -63,6 +64,7 @@ async function saveSettings(req, res) {
 
     const next = {
       planProvider:          body.planProvider          || prev.planProvider          || 'ollama',
+      floorPlanMode:         body.floorPlanMode         || prev.floorPlanMode         || 'solver',
       imageProvider:         body.imageProvider         || prev.imageProvider         || 'pollinations',
       shapeProvider:         body.shapeProvider         || prev.shapeProvider         || 'huggingface',
       openaiApiKey:          isMasked(body.openaiApiKey)

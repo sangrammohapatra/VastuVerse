@@ -16,6 +16,7 @@ let _expiry = 0;
 
 const ENV = {
   planProvider:          () => process.env.AI_PLAN_PROVIDER            || 'ollama',
+  floorPlanMode:         () => process.env.AI_FLOOR_PLAN_MODE          || 'solver',  // 'solver' | 'ai'
   imageProvider:         () => process.env.AI_IMAGE_PROVIDER           || 'pollinations',
   shapeProvider:         () => process.env.AI_SHAPE_PROVIDER           || 'huggingface',
   openaiApiKey:          () => process.env.OPENAI_API_KEY              || '',

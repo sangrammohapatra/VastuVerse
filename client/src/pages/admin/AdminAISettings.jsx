@@ -20,6 +20,11 @@ const PLAN_PROVIDERS = {
   gpt4o:  { label: 'GPT-4o (OpenAI)',     color: '#10A37F', description: 'Uses the OpenAI Chat Completions API to enrich floor plan labels and Vastu advice.' },
 };
 
+const FLOOR_PLAN_MODES = {
+  solver: { label: 'Constraint Solver (Recommended)', color: '#0284C7', description: 'Deterministic zone-aware placement — fast, reliable, always valid. AI is used only for labels and advice.' },
+  ai:     { label: 'AI-Generated Layout',             color: '#7C3AED', description: 'The LLM places rooms on the plot using Vastu zones and NBC rules. Falls back to solver if geometry is invalid.' },
+};
+
 const IMAGE_PROVIDERS = {
   pollinations: { label: 'Pollinations (free)',  color: '#059669', description: 'Stateless URL-based rendering — no API key, no cost. Images are generated on demand.' },
   dalle:        { label: 'DALL-E 3 (OpenAI)',    color: '#10A37F', description: 'High-quality image generation via OpenAI Images API. Requires an OpenAI API key.' },
@@ -89,6 +94,7 @@ export default function AdminAISettings() {
 
   const [form, setForm] = useState({
     planProvider: 'ollama',
+    floorPlanMode: 'solver',
     imageProvider: 'pollinations',
     shapeProvider: 'huggingface',
     openaiApiKey: '',
@@ -121,6 +127,7 @@ export default function AdminAISettings() {
       const { data } = await api.get('/admin/ai-settings');
       setForm({
         planProvider:          data.planProvider          || 'ollama',
+        floorPlanMode:         data.floorPlanMode         || 'solver',
         imageProvider:         data.imageProvider         || 'pollinations',
         shapeProvider:         data.shapeProvider         || 'huggingface',
         openaiApiKey:          data.openaiApiKey          || '',
@@ -210,10 +217,12 @@ export default function AdminAISettings() {
     </Stack>
   );
 
-  const planMeta  = PLAN_PROVIDERS[form.planProvider]    || PLAN_PROVIDERS.ollama;
-  const imgMeta   = IMAGE_PROVIDERS[form.imageProvider]  || IMAGE_PROVIDERS.pollinations;
-  const shapeMeta = SHAPE_PROVIDERS[form.shapeProvider]  || SHAPE_PROVIDERS.huggingface;
-  const needsOpenAI = form.planProvider === 'gpt4o' || form.imageProvider === 'dalle';
+  const planMeta      = PLAN_PROVIDERS[form.planProvider]        || PLAN_PROVIDERS.ollama;
+  const floorModeMeta = FLOOR_PLAN_MODES[form.floorPlanMode]     || FLOOR_PLAN_MODES.solver;
+  const imgMeta       = IMAGE_PROVIDERS[form.imageProvider]      || IMAGE_PROVIDERS.pollinations;
+  const shapeMeta     = SHAPE_PROVIDERS[form.shapeProvider]      || SHAPE_PROVIDERS.huggingface;
+  const needsOpenAI   = form.planProvider === 'gpt4o' || form.imageProvider === 'dalle';
+  const aiModeActive  = form.floorPlanMode === 'ai';
 
   /* ── render ───────────────────────────────────────────────────────── */
 
@@ -259,9 +268,22 @@ export default function AdminAISettings() {
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <Box sx={{ flex: 1 }}>
-                <ProviderSelector label="Floor Plan (LLM)" value={form.planProvider} onChange={set('planProvider')} options={PLAN_PROVIDERS} />
+                <ProviderSelector label="LLM Provider" value={form.planProvider} onChange={set('planProvider')} options={PLAN_PROVIDERS} />
                 <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>{planMeta.description}</Typography>
               </Box>
+              <Box sx={{ flex: 1 }}>
+                <ProviderSelector label="Floor Plan Generation" value={form.floorPlanMode} onChange={set('floorPlanMode')} options={FLOOR_PLAN_MODES} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>{floorModeMeta.description}</Typography>
+              </Box>
+            </Stack>
+            {aiModeActive && (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                AI-Generated Layout uses the LLM to place rooms spatially. Results are validated and fall back
+                to the constraint solver automatically if the AI produces invalid geometry.
+                Recommended only with GPT-4o or a capable local model.
+              </Alert>
+            )}
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <Box sx={{ flex: 1 }}>
                 <ProviderSelector label="Image Render" value={form.imageProvider} onChange={set('imageProvider')} options={IMAGE_PROVIDERS} />
                 <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>{imgMeta.description}</Typography>
